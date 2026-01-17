@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ads Earning Platform</title>
+
+<style>
+body{margin:0;background:#0f172a;color:#fff;font-family:Arial}
+input,button,textarea{
+ width:100%;padding:12px;margin:6px 0;
+ border-radius:8px;border:none
+}
+button{background:#22c55e;font-weight:bold;cursor:pointer}
+.hidden{display:none}
+.card{background:#020617;padding:20px;border-radius:14px;margin:12px}
+.ad-box{border:1px solid #334155;padding:12px;border-radius:10px;margin-top:10px}
+.small{font-size:13px;color:#94a3b8}
+.icon-btn{
+ background:#1e293b;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ gap:8px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- AUTH -->
+<div id="authBox" class="card">
+<h2>Signup</h2>
+<input id="suEmail" placeholder="Email">
+<input id="suPass" type="password" placeholder="Password (min 6)">
+<input id="suRef" placeholder="Referral Code (optional)">
+<button onclick="signup()">Signup</button>
+
+<hr>
+
+<h2>Login</h2>
+<input id="liEmail" placeholder="Email">
+<input id="liPass" type="password" placeholder="Password">
+<button onclick="login()">Login</button>
+</div>
+
+<!-- USER PANEL -->
+<div id="userPanel" class="card hidden">
+<h2>User Dashboard</h2>
+
+<p>Wallet: ₹<span id="wallet">0.000</span></p>
+<p>Valid Clicks: <span id="clicks">0</span></p>
+<p class="small">₹7 CPM | One link one click</p>
+
+<h3>Ads</h3>
+<div id="ads"></div>
+
+<button onclick="withdraw()">Withdraw</button>
+<button onclick="logout()">Logout</button>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="adminPanel" class="card hidden">
+<h2>Admin Panel</h2>
+
+<h3>Ad Unit Code</h3>
+<textarea id="adCode" rows="4"></textarea>
+<button onclick="saveAd()">Save Ad</button>
+<button onclick="removeAd()" style="background:#dc2626">Remove Ad</button>
+
+<h3>Shortener Link</h3>
+<input id="shortLinkInput" placeholder="Paste shortener URL">
+<button onclick="saveShortLink()">Save Link</button>
+<button onclick="removeShortLink()" style="background:#dc2626">Remove Link</button>
+
+<h3>Live Settings</h3>
+<pre id="liveAd" class="small"></pre>
+<pre id="liveShortLink" class="small"></pre>
+
+<h3>Analytics</h3>
+<p>Users: <span id="aUsers">0</span></p>
+<p>Total Clicks: <span id="aClicks">0</span></p>
+<p>Total Wallet: ₹<span id="aWallet">0</span></p>
+
+<button onclick="logout()">Logout</button>
+</div>
+
+<hr>
+
+<!-- ADMIN LOGIN -->
+<div class="card">
+<h3>Admin Login</h3>
+<input id="adminPass" type="password">
+<button onclick="adminLogin()">Admin Login</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import {
+ getAuth,
+ createUserWithEmailAndPassword,
+ signInWithEmailAndPassword,
+ signOut,
+ onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import {
+ getDatabase,
+ ref,
+ set,
+ get,
+ update
+} from "https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js";
+
+const firebaseConfig = {
+ apiKey: "AIzaSyBlL5B1qto1kwqqZCPwzWxjumHdbyQUnDU",
+ authDomain: "earn-cash-77c4b.firebaseapp.com",
+ databaseURL: "https://earn-cash-77c4b-default-rtdb.firebaseio.com",
+ projectId: "earn-cash-77c4b",
+ storageBucket: "earn-cash-77c4b.firebasestorage.app",
+ messagingSenderId: "907121665621",
+ appId: "1:907121665621:web:568b2e45b9dbaf04a2d6dc"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+let isAdmin=false;
+
+/* AUTH */
+window.signup = async()=>{
+ const cred = await createUserWithEmailAndPassword(auth,suEmail.value,suPass.value);
+ await set(ref(db,"users/"+cred.user.uid),{
+  wallet:0,
+  clicks:0,
+  clickHistory:{}
+ });
+};
+
+window.login = ()=>signInWithEmailAndPassword(auth,liEmail.value,liPass.value);
+window.logout = ()=>{isAdmin=false; signOut(auth);};
+
+/* ADMIN */
+window.adminLogin = ()=>{
+ if(adminPass.value==="912268rs"){
+  isAdmin=true;
+  authBox.classList.add("hidden");
+  adminPanel.classList.remove("hidden");
+  loadAdmin();
+ } else alert("Wrong password");
+};
+
+window.saveAd = ()=>set(ref(db,"settings/adCode"),adCode.value).then(loadAdmin);
+window.removeAd = ()=>set(ref(db,"settings/adCode"),"").then(loadAdmin);
+
+window.saveShortLink = ()=>set(ref(db,"settings/shortLink"),{
+ id:"main",
+ url:shortLinkInput.value
+}).then(loadAdmin);
+
+window.removeShortLink = ()=>set(ref(db,"settings/shortLink"),null).then(loadAdmin);
+
+async function loadAdmin(){
+ const ad=await get(ref(db,"settings/adCode"));
+ const sl=await get(ref(db,"settings/shortLink"));
+ liveAd.innerText=ad.exists()?ad.val():"No Ad";
+ liveShortLink.innerText=sl.exists()?sl.val().url:"No Link";
+
+ const users=await get(ref(db,"users"));
+ let u=0,c=0,w=0;
+ if(users.exists()){
+  Object.values(users.val()).forEach(x=>{
+   u++; c+=x.clicks; w+=x.wallet;
+  });
+ }
+ aUsers.innerText=u;
+ aClicks.innerText=c;
+ aWallet.innerText=w.toFixed(2);
+}
+
+/* USER */
+async function loadUserAds(uid){
+ const ad=await get(ref(db,"settings/adCode"));
+ const sl=await get(ref(db,"settings/shortLink"));
+ ads.innerHTML="";
+ if(!ad.exists()||!sl.exists()) return;
+
+ const box=document.createElement("div");
+ box.className="ad-box";
+ box.innerHTML=ad.val();
+ box.onclick=()=>handleClick(uid,sl.val());
+ ads.appendChild(box);
+}
+
+async function handleClick(uid,link){
+ const uref=ref(db,"users/"+uid);
+ const snap=await get(uref);
+ const hist=snap.val().clickHistory||{};
+ if(hist[link.id]) return alert("Already clicked");
+
+ hist[link.id]=true;
+ const clicks=snap.val().clicks+1;
+ const wallet=snap.val().wallet+0.007;
+
+ await update(uref,{clickHistory:hist,clicks,wallet});
+ window.open(link.url,"_blank");
+
+ clicksEl.innerText=clicks;
+ walletEl.innerText=wallet.toFixed(3);
+}
+
+window.withdraw=()=>alert("Withdraw coming soon");
+
+/* STATE */
+onAuthStateChanged(auth,async(user)=>{
+ if(isAdmin) return;
+ if(user){
+  authBox.classList.add("hidden");
+  userPanel.classList.remove("hidden");
+  loadUserAds(user.uid);
+ }
+});
+</script>
+
+</body>
+</html>
